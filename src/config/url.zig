@@ -81,6 +81,10 @@ const rooted_or_relative_path_prefix =
 // Branch 2: Absolute paths and dot-relative paths (/, ./, ../).
 // A dotted segment is treated as file-like, while the undotted case stays
 // broad to capture directory-like paths with spaces.
+//
+// LOCAL-PATCH: `no_trailing_punctuation` mirrors the URL branch so a
+// sentence-ending `.`/`,` is not consumed into the match.
+// Upstream discussion: https://github.com/ghostty-org/ghostty/discussions/12527
 const rooted_or_relative_path_branch =
     rooted_or_relative_path_prefix ++
     "(?:" ++
@@ -88,11 +92,13 @@ const rooted_or_relative_path_branch =
     path_chars ++ "+" ++
     dotted_path_space_segments ++
     no_trailing_colon ++
+    no_trailing_punctuation ++
     "|" ++
     non_dotted_path_lookahead ++
     path_chars ++ "+" ++
     any_path_space_segments ++
     no_trailing_colon ++
+    no_trailing_punctuation ++
     ")";
 
 // Branch 3: Bare relative paths such as src/config/url.zig.
@@ -100,11 +106,13 @@ const bare_relative_path_prefix =
     \\(?<!\$\d*)(?<!\w)[\w][\w\-.]*\/
 ;
 
+// LOCAL-PATCH: see comment on rooted_or_relative_path_branch.
 const bare_relative_path_branch =
     dotted_path_lookahead ++
     bare_relative_path_prefix ++
     path_chars ++ "+" ++
-    no_trailing_colon;
+    no_trailing_colon ++
+    no_trailing_punctuation;
 
 pub const regex =
     scheme_url_branch ++
@@ -335,9 +343,29 @@ test "url regex" {
             .expect = "http://[2001:db8::1]/docs",
         },
         // Trailing whitespace isn't part of a detected file path.
+        // LOCAL-PATCH: upstream expects `./spaces-end.` here; the trailing
+        // `.` is sentence punctuation, so we strip it too.
         .{
             .input = "./spaces-end.   ",
-            .expect = "./spaces-end.",
+            .expect = "./spaces-end",
+        },
+        .{
+            .input = "./spaces-end   ",
+            .expect = "./spaces-end",
+        },
+        // LOCAL-PATCH: sentence-ending punctuation must not be part of
+        // the matched path. Upstream discussion #12527.
+        .{
+            .input = "Opened ~/Downloads/fachtag2025-all.xlsx. Three CSVs removed.",
+            .expect = "~/Downloads/fachtag2025-all.xlsx",
+        },
+        .{
+            .input = "edit src/config/url.zig.",
+            .expect = "src/config/url.zig",
+        },
+        .{
+            .input = "see ../example.py, plus more text",
+            .expect = "../example.py",
         },
         // File paths with internal spaces
         .{
