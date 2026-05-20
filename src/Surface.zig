@@ -4345,9 +4345,14 @@ fn linkAtPin(
     const line = screen.selectLine(.{
         .pin = mouse_pin,
         .whitespace = null,
-        // Respect semantic prompt boundaries so link/path matching doesn't
-        // merge shell prompt content with the text beside it.
-        .semantic_prompt_boundary = true,
+        // LOCAL-PATCH: upstream switched this to `true` in 85dc4b184 so
+        // shell-prompt text doesn't merge into link matches. Inside Claude
+        // Code (and presumably other rich TUIs) the semantic_content varies
+        // cell-to-cell, which slices the line into tiny regions and breaks
+        // link detection entirely — cmd+hover never highlights anything.
+        // Revert to `false` until upstream handles non-shell semantic state
+        // more gracefully.
+        .semantic_prompt_boundary = false,
     }) orelse return null;
 
     const strmap = try screen.selectionStringMap(self.alloc, .{
