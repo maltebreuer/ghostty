@@ -6465,6 +6465,25 @@ fn completeKittyClipboardRead(
 }
 
 fn showDesktopNotification(self: *Surface, title: [:0]const u8, body: [:0]const u8) !void {
+    // LOCAL-PATCH: `Seamus:`-titled OSC 777 payloads are in-app bookkeeping
+    // from the bundled Claude Code plugin (session ids, busy edges), consumed
+    // by the embedding app and never shown by the OS. The anti-spam limits
+    // below are app-wide, so restoring several tabs at once (or two tabs
+    // reporting the same session) silently dropped all but one of them.
+    // Bypass the limiter without touching its state so real notifications
+    // keep their own budget.
+    if (std.mem.startsWith(u8, title, "Seamus:")) {
+        _ = try self.rt_app.performAction(
+            .{ .surface = self },
+            .desktop_notification,
+            .{
+                .title = title,
+                .body = body,
+            },
+        );
+        return;
+    }
+
     // Wyhash is used to hash the contents of the desktop notification to limit
     // how fast identical notifications can be sent sequentially.
     const hash_algorithm = std.hash.Wyhash;
